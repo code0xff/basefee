@@ -1,3 +1,7 @@
+// basefee.ts
+
+export type BaseFeeStrategy = 'linear' | 'weighted-quadratic';
+
 export type BaseFeeParams = {
 	gasLimit: bigint;
 
@@ -9,6 +13,12 @@ export type BaseFeeParams = {
 	// minBaseFeeWei is used as the starting base fee.
 	minBaseFeeWei: bigint;
 	maxBaseFeeWei: bigint;
+
+	// ✅ Strategy selection
+	strategy: BaseFeeStrategy;
+
+	// ✅ Weight (used by weighted-quadratic)
+	k: number; // e.g. 0 ~ 10
 };
 
 export type Segment = {
@@ -34,10 +44,73 @@ function clampBig(v: bigint, lo: bigint, hi: bigint) {
 	return v;
 }
 
-function applyRate(baseFee: bigint, ratePct: number, dir: 'inc' | 'dec'): bigint {
-	const r = BigInt(Math.floor(ratePct * 100));
-	const mul = dir === 'inc' ? 10_000n + r : 10_000n - r;
+/**
+ * Apply a delta percent directly to baseFee.
+ * - deltaPct is a percentage value, e.g. +2.5 means +2.5%
+ * - Uses basis points (0.01%) quantization for determinism.
+ */
+function applyDeltaPct(baseFee: bigint, deltaPct: number): bigint {
+	// 1bp = 0.01%
+	const bp = BigInt(Math.floor(deltaPct * 100)); // quantize to 0.01%
+	const mul = 10_000n + bp; // 100% = 10_000
 	return (baseFee * mul) / 10_000n;
+}
+
+function normalizeRatePct(v: number) {
+	return Math.max(0, Number.isFinite(v) ? v : 0);
+}
+
+function normalizeK(v: number) {
+	return Math.max(0, Number.isFinite(v) ? v : 0);
+}
+
+/**
+ * Compute deltaPct and action based on *previous block* utilization (prevGasUsedPct).
+ * This matches the simulator's design: block i baseFee depends on block i-1 utilization.
+ */
+function calcDeltaPct(
+	prevGasUsedPct: number,
+	params: BaseFeeParams
+): { deltaPct: number; action: SimPoint['action'] } {
+	const incTh = clampNum(params.increasingThresholdPct);
+	const decTh = clampNum(params.decreasingThresholdPct);
+	const rate = normalizeRatePct(params.baseFeeChangeRatePct);
+
+	// Dead band: no change
+	if (prevGasUsedPct <= incTh && prevGasUsedPct >= decTh) {
+		return { deltaPct: 0, action: 'hold' };
+	}
+
+	if (params.strategy === 'linear') {
+		if (prevGasUsedPct > incTh) return { deltaPct: +rate, action: 'inc' };
+		return { deltaPct: -rate, action: 'dec' };
+	} else {
+		// if gasUsedPct > IncreasingThreshold:
+		//  over = (gasUsedPct - IncreasingThreshold) / (100 - IncreasingThreshold) // over : 0~1
+		//  deltaPct = + BaseFeeChangeRate * (1 + K * over^2)
+
+		// else if gasUsedPct < DecreasingThreshold:
+		//  under = (DecreasingThreshold - gasUsedPct) / DecreasingThreshold // under : 0~1
+		//  deltaPct = - BaseFeeChangeRate * (1 + K * under^2) // K : 가중치계수
+
+		// else:
+		//  deltaPct = 0  // Dead Band: 10~33% 변동 없음
+
+		// newBaseFee = parentBaseFee * (1 + deltaPct/100)
+
+		const K = normalizeK(params.k);
+
+		if (prevGasUsedPct > incTh) {
+			const over = (prevGasUsedPct - incTh) / (100 - incTh); // 0~1
+			const deltaPct = +rate * (1 + K * over ** 2);
+			return { deltaPct, action: 'inc' };
+		} else {
+			// prevGasUsedPct < decTh
+			const under = (decTh - prevGasUsedPct) / decTh; // 0~1
+			const deltaPct = -rate * (1 + K * under ** 2);
+			return { deltaPct, action: 'dec' };
+		}
+	}
 }
 
 export function expandSegments(segments: Segment[]): number[] {
@@ -49,12 +122,9 @@ export function expandSegments(segments: Segment[]): number[] {
 	}
 	return seq;
 }
+
 export function simulateBaseFee(params: BaseFeeParams, segments: Segment[]): SimPoint[] {
 	const gasLimit = params.gasLimit === 0n ? 1n : params.gasLimit;
-
-	const incTh = clampNum(params.increasingThresholdPct);
-	const decTh = clampNum(params.decreasingThresholdPct);
-	const rate = Math.max(0, params.baseFeeChangeRatePct);
 
 	// Start from minBaseFeeWei
 	let baseFee = clampBig(params.minBaseFeeWei, params.minBaseFeeWei, params.maxBaseFeeWei);
@@ -82,14 +152,10 @@ export function simulateBaseFee(params: BaseFeeParams, segments: Segment[]): Sim
 		const gasUsedPct = gasPctSeq[i];
 		const gasUsed = (gasLimit * BigInt(gasUsedPct)) / 100n;
 
-		let action: SimPoint['action'] = 'hold';
+		const { deltaPct, action } = calcDeltaPct(prevGasUsedPct, params);
 
-		if (prevGasUsedPct > incTh) {
-			baseFee = applyRate(baseFee, rate, 'inc');
-			action = 'inc';
-		} else if (prevGasUsedPct < decTh) {
-			baseFee = applyRate(baseFee, rate, 'dec');
-			action = 'dec';
+		if (deltaPct !== 0) {
+			baseFee = applyDeltaPct(baseFee, deltaPct);
 		}
 
 		baseFee = clampBig(baseFee, params.minBaseFeeWei, params.maxBaseFeeWei);

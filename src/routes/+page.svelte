@@ -1,3 +1,4 @@
+<!-- +page.svelte -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 
@@ -21,7 +22,11 @@
 		decreasingThresholdPct: 10,
 		baseFeeChangeRatePct: 2,
 		minBaseFeeWei: 5_000_000_000_000n,
-		maxBaseFeeWei: 5_000_000_000_000_000n
+		maxBaseFeeWei: 5_000_000_000_000_000n,
+
+		// ✅ add
+		strategy: 'linear',
+		k: 4
 	};
 
 	let segments: Segment[] = [
@@ -190,6 +195,38 @@
 								{/if}
 							</div>
 						</div>
+
+						<!-- ✅ Strategy -->
+						<div class="space-y-1">
+							<div class="text-sm whitespace-nowrap text-muted-foreground">Strategy</div>
+
+							<Select.Root
+								type="single"
+								value={params.strategy}
+								onValueChange={(v) => (params = { ...params, strategy: v as any })}
+							>
+								<Select.Trigger class="w-full" placeholder="Select a strategy">{params.strategy}</Select.Trigger>
+
+								<Select.Content>
+									<Select.Item value="linear">Linear (Simple)</Select.Item>
+									<Select.Item value="weighted-quadratic">Weighted Quadratic</Select.Item>
+								</Select.Content>
+							</Select.Root>
+						</div>
+
+						<!-- ✅ K (only for weighted-quadratic) -->
+						{#if params.strategy === 'weighted-quadratic'}
+							<div class="space-y-1">
+								<div class="text-sm whitespace-nowrap text-muted-foreground">K (weight)</div>
+								<Input
+									class="w-full"
+									type="number"
+									value={params.k}
+									oninput={(e) =>
+										(params = { ...params, k: toNum(e.currentTarget.value, params.k) })}
+								/>
+							</div>
+						{/if}
 
 						<!-- Thresholds / rate -->
 						<div class="grid grid-cols-1 gap-3">
