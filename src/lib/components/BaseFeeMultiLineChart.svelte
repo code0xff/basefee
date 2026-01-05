@@ -5,7 +5,7 @@
 	import { scaleLinear } from 'd3-scale';
 	import { curveNatural } from 'd3-shape';
 
-	import type { RunSeries } from '@/components/BaseFeeRunTable.svelte';
+	import RunSeries from '@/components/BaseFeeRunTable.svelte';
 
 	export let runs: RunSeries[] = [];
 
@@ -88,7 +88,7 @@
 					{data}
 					x="block"
 					{xScale}
-					axis="both"
+					axis
 					legend={true}
 					{series}
 					props={{
