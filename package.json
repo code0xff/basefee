@@ -3,6 +3,7 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"homepage": "https://code0xff.github.io/basefee/",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -13,7 +14,8 @@
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"deploy": "npm run build && npx gh-pages -d build -t"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -33,6 +35,7 @@
 		"eslint": "^9.39.1",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.13.1",
+		"gh-pages": "^6.3.0",
 		"globals": "^16.5.0",
 		"layerchart": "^2.0.0-next.43",
 		"playwright": "^1.57.0",
