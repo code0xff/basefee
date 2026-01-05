@@ -30,9 +30,9 @@
 	};
 
 	let segments: Segment[] = [
-		{ blocks: 400, utilizationPct: 60 },
+		{ blocks: 500, utilizationPct: 60 },
 		{ blocks: 200, utilizationPct: 20 },
-		{ blocks: 400, utilizationPct: 5 }
+		{ blocks: 500, utilizationPct: 5 }
 	];
 
 	/* ---------------- runs ---------------- */
