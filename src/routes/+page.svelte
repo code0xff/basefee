@@ -21,7 +21,7 @@
 		increasingThresholdPct: 33,
 		decreasingThresholdPct: 10,
 		baseFeeChangeRatePct: 2,
-		minBaseFeeWei: 5_000_000_000_000n,
+		minBaseFeeWei: 1_000_000_000_000n,
 		maxBaseFeeWei: 5_000_000_000_000_000n,
 
 		// ✅ add
